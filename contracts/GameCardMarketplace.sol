@@ -3,7 +3,7 @@ pragma solidity ^0.8.20;
 
 import "@openzeppelin/contracts/token/ERC721/extensions/ERC721URIStorage.sol";
 import "@openzeppelin/contracts/access/Ownable.sol";
-import "@openzeppelin/contracts/utils/ReentrancyGuard.sol";
+import "@openzeppelin/contracts/security/ReentrancyGuard.sol";
 
 contract GameCardMarketplace is ERC721URIStorage, Ownable, ReentrancyGuard {
     uint256 private _tokenIds;
@@ -24,16 +24,15 @@ contract GameCardMarketplace is ERC721URIStorage, Ownable, ReentrancyGuard {
     event CardListed(uint256 indexed tokenId, address indexed seller, uint256 price);
     event CardSold(uint256 indexed tokenId, address indexed seller, address indexed buyer, uint256 price);
 
-    constructor() ERC721("Aetheria Cards", "AETH") Ownable(msg.sender) {}
+    constructor() ERC721("Aetheria Cards", "AETH") {}
 
     function mintCard(string memory tokenURI, uint256 price) public returns (uint256) {
         _tokenIds += 1;
         uint256 newTokenId = _tokenIds;
 
-        _mint(msg.sender, newTokenId);
+        _safeMint(msg.sender, newTokenId);
         _setTokenURI(newTokenId, tokenURI);
-
-        _ownedTokens[msg.sender].push(newTokenId);
+        _addTokenToOwner(msg.sender, newTokenId);
 
         if (price > 0) {
             _listToken(msg.sender, newTokenId, price);
@@ -68,6 +67,8 @@ contract GameCardMarketplace is ERC721URIStorage, Ownable, ReentrancyGuard {
         item.sold = true;
         item.listed = false;
 
+        _removeTokenFromOwner(seller, tokenId);
+        _addTokenToOwner(msg.sender, tokenId);
         _transfer(seller, msg.sender, tokenId);
 
         (bool success, ) = payable(seller).call{value: salePrice}("");
@@ -121,5 +122,20 @@ contract GameCardMarketplace is ERC721URIStorage, Ownable, ReentrancyGuard {
         });
 
         emit CardListed(tokenId, seller, price);
+    }
+
+    function _addTokenToOwner(address owner, uint256 tokenId) internal {
+        _ownedTokens[owner].push(tokenId);
+    }
+
+    function _removeTokenFromOwner(address owner, uint256 tokenId) internal {
+        uint256[] storage tokens = _ownedTokens[owner];
+        for (uint256 i = 0; i < tokens.length; i++) {
+            if (tokens[i] == tokenId) {
+                tokens[i] = tokens[tokens.length - 1];
+                tokens.pop();
+                break;
+            }
+        }
     }
 }
